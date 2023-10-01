@@ -1,0 +1,382 @@
+#include <stdio.h>
+#include "mabib.h"
+#include <stdlib.h>
+#include <math.h>
+
+// la saisie du vol
+void saisir_vol(VOL *vol)
+{
+    printf("donner la reference du vol : ");
+    scanf("%d", &(vol->refVol));
+    printf("donner la destination : ");
+    scanf("%s", (vol->destination));
+    printf("donner le nombre de places disponivles : ");
+    scanf("%d", &(vol->nbPlaceDispo));
+    printf("donner le prix d'une place : ");
+    scanf("%f", &(vol->prixPlace));
+}
+
+// affichage du vol
+void afficher_vol(VOL vol)
+{
+    printf("la reference du vol est : %d \n ", vol.refVol);
+    printf("la destination du vol est : %s \n", vol.destination);
+    printf(" le nbr de places disponibles est : %d \n ", vol.nbPlaceDispo);
+    printf("le prix d'une place est : %f \n", vol.prixPlace);
+}
+
+// ecriture des données de la structure vol dans un fichier texte
+void fichier_vol(VOL vol)
+{
+    FILE *file = fopen("vols.txt", "a+"); // mode ecriture
+    if (file == NULL)
+    {
+        printf("erreur d'ouverture du fichier");
+    }
+    fprintf(file, "%d\t%s\t%d\t%f\n", vol.refVol, vol.destination, vol.nbPlaceDispo, vol.prixPlace);
+    fclose(file);
+}
+
+// affichage du fichier vol
+void afficher_fichier_vol()
+{
+    FILE *file = fopen("vols.txt", "r"); // mode lecture
+    if (file == NULL)
+    {
+        printf("erreur d'ouverture du fichier");
+    }
+    VOL v;
+    while (fscanf(file, "%d\t%s\t%d\t%f\n", &v.refVol, v.destination, &v.nbPlaceDispo, &v.prixPlace)!=EOF)
+    {
+         printf("%d %s %d %f\n", v.refVol, v.destination, v.nbPlaceDispo, v.prixPlace);
+    }
+    
+    fclose(file);
+}
+
+// affichage des données du vol en donnant sa ref
+VOL recuperer_info_vol(int ref)
+{
+    VOL vol;
+    FILE *file = fopen("vols.txt", "r");
+    if (file == NULL)
+    {
+        printf("erreur d'ouverture du fichier");
+    }
+    int found = 0;
+    while (!feof(file))
+    {
+        fscanf(file, "%d\t%s\t%d\t%f\n", &vol.refVol, vol.destination, &vol.nbPlaceDispo, &vol.prixPlace);
+        if (vol.refVol == ref)
+        {
+            found = 1;
+            break;
+        }
+    }
+    if (found)
+    {
+        return vol;
+    }
+    else
+    {
+        vol.refVol = -1; 
+        strcpy(vol.destination,"");
+        vol.nbPlaceDispo=-1;
+        vol.prixPlace=0;
+        return vol;
+    }
+    fclose(file);
+}
+
+// demande de reservation d'un vol
+int demande_vol(int refVol, int nbPlaces, int agenceNum)
+{
+
+    FILE *fichierVols = fopen("vols.txt", "r+"); // mode lecture ecriture
+    if (fichierVols == NULL)
+    {
+        printf("Erreur lors de l'ouverture du fichier vols.txt\n");
+    }
+
+    // Lire les données de chaque vol dans le fichier vols.txt
+    VOL vol;
+    int trouve = 0;
+    int pos0 = ftell(fichierVols);
+    int a=fscanf(fichierVols, "%d\t%s\t%d\t%f\n", &vol.refVol, vol.destination, &vol.nbPlaceDispo,&vol.prixPlace);
+    
+    while ( a!=EOF)
+    { 
+        if (vol.refVol == refVol)
+        
+        {
+         printf("le nombre ancien est %d",vol.nbPlaceDispo);
+            if (nbPlaces <= vol.nbPlaceDispo)
+            {
+                printf("le nombre ancien est %d",vol.nbPlaceDispo);
+                vol.nbPlaceDispo -= nbPlaces; // Mis à jour du nbPlaceDispo dans  vols.txt
+                printf("le nombre est %d",vol.nbPlaceDispo);
+                    fseek(fichierVols, pos0, SEEK_SET);
+                    fprintf(fichierVols, "%d\t%s\t%d\t%f\n", vol.refVol, vol.destination, vol.nbPlaceDispo, vol.prixPlace);
+                FILE *fichierHisto = fopen("histo.txt", "a"); // mode ajout
+                if (fichierHisto == NULL)
+                {
+                    printf("Erreur lors de l'ouverture du fichier histo.txt\n");
+                    fclose(fichierVols);
+                }
+
+                // Enregistrer les données de la structure RESERVATION dans histo.txt
+                RESERVATION reservation;
+                reservation.refVol = refVol;
+                reservation.agence = agenceNum;
+                strcpy(reservation.transaction, "demande");
+                reservation.valeur = nbPlaces;
+                strcpy(reservation.resultat, "succes");
+
+                fprintf(fichierHisto, "%d\t%d\t%s\t%d\t%s\n", reservation.refVol, reservation.agence, reservation.transaction, reservation.valeur, reservation.resultat);
+                fclose(fichierHisto);
+
+                FILE *fichierFacture = fopen("facture.txt", "r+"); // mode ecriture
+                if (fichierFacture == NULL)
+                {
+                    printf("Erreur lors de l'ouverture du fichier facture.txt\n");
+                    fclose(fichierVols);
+                }
+
+                // Enregistrer les données de la structure FACTURE dans facture.txt
+                FACTURE facture;
+                int trouveFact = 0;
+                int pos1 = ftell(fichierFacture);
+                int b =fscanf(fichierFacture, "%d\t%f\n", &facture.agence, &facture.somme);
+                while (b !=EOF)
+                {
+                    if (facture.agence == agenceNum)
+                    {
+                        trouveFact = 1;
+                        facture.somme += nbPlaces * vol.prixPlace;
+                        fseek(fichierFacture, pos1, SEEK_SET);
+                        fprintf(fichierFacture, "%d\t%f\n", facture.agence, facture.somme);
+                    }
+                  pos1 = ftell(fichierFacture);
+                 b= fscanf(fichierFacture, "%d\t%f\n", &facture.agence, &facture.somme);
+                }
+                if (!trouveFact)
+                {
+                    facture.agence = agenceNum;
+                    facture.somme = nbPlaces * vol.prixPlace;
+                    fprintf(fichierFacture, "%d\t%f\n", facture.agence, facture.somme);
+                }
+                fclose(fichierFacture);
+
+                printf("Réservation effectuée avec succès pour le vol %d.\n", refVol);
+                trouve = 1;
+                return 1;
+                break;
+            }
+            else
+            {
+
+                printf("Nombre de places à réserver supérieur au nombre de places disponibles pour le vol %d.\n", refVol);
+                FILE *fichierHisto = fopen("histo.txt", "a"); // mode ajout
+                if (fichierHisto == NULL)
+                {
+                    printf("Erreur lors de l'ouverture du fichier histo.txt\n");
+                    fclose(fichierVols);
+                }
+
+                // Enregistrer les données de la structure RESERVATION dans histo.txt
+                RESERVATION reservation;
+                reservation.refVol = refVol;
+                reservation.agence = agenceNum;
+                strcpy(reservation.transaction, "demande");
+                reservation.valeur = nbPlaces;
+                strcpy(reservation.resultat, "echec");
+
+                fprintf(fichierHisto, "%d\t%d\t%s\t%d\t%s\n", reservation.refVol, reservation.agence, reservation.transaction, reservation.valeur, reservation.resultat);
+                fclose(fichierHisto);
+                fclose(fichierVols);
+                return 0;
+            }
+        }
+          pos0 = ftell(fichierVols);
+
+         a=fscanf(fichierVols, "%d\t%s\t%d\t%f\n", &vol.refVol, vol.destination, &vol.nbPlaceDispo, &vol.prixPlace);
+    }
+
+    fclose(fichierVols);
+
+    if (!trouve)
+    {
+        printf("Vol avec cette référence n'esxite pas %d \n", refVol);
+        return 0;
+    }
+    return 0;
+}
+//annulation d'un vol
+int annulation_vol(int refVol, int nbPlaces, int agenceNum)
+{
+
+
+    FILE *fichierFacture = fopen("facture.txt", "r+"); // mode ecriture
+    if (fichierFacture == NULL)
+    {
+        printf("Erreur lors de l'ouverture du fichier facture.txt\n");
+        
+    }
+    FILE *fichierHisto = fopen("histo.txt", "r+");
+    if (fichierHisto == NULL)
+    {
+        printf("Erreur lors de l'ouverture du fichier histo.txt\n");
+        
+    }
+    FILE *fichierVols = fopen("vols.txt", "r+"); // mode lecture ecriture
+    if (fichierVols == NULL)
+    {
+        printf("Erreur lors de l'ouverture du fichier vols.txt\n");
+        
+    }
+    // Lire les données de chaque vol dans le fichier vols.txt
+    VOL v;
+    RESERVATION r;
+    
+    int a=fscanf(fichierHisto, "%d\t%d\t%s\t%d\t%s\n", &r.refVol, &r.agence, r.transaction, &r.valeur, r.resultat);
+    
+    while ( a!=EOF)
+    { 
+        if (r.agence == agenceNum && r.refVol == refVol && r.valeur >= nbPlaces)
+        
+        {
+        int pos2 = ftell(fichierVols);
+        int b=fscanf(fichierVols, "%d\t%s\t%d\t%f\n", &v.refVol, v.destination, &v.nbPlaceDispo, &v.prixPlace);
+        while (b!=EOF)
+            {
+            if (v.refVol == refVol)
+                {
+                    v.nbPlaceDispo += nbPlaces; // Mis à jour du nbPlaceDispo dans  vols.txt
+                    fseek(fichierVols, pos2, SEEK_SET);
+                    fprintf(fichierVols, "%d\t%s\t%d\t%f\n", v.refVol, v.destination, v.nbPlaceDispo, v.prixPlace);
+                    // Enregistrer les données de la structure RESERVATION dans histo.txt
+                    RESERVATION reservation;
+                    reservation.refVol = refVol;
+                    reservation.agence = agenceNum;
+                    strcpy(reservation.transaction, "annulation");
+                    reservation.valeur = nbPlaces;
+                    strcpy(reservation.resultat, "succes");
+                    fseek(fichierHisto, 0,2);
+                    fprintf(fichierHisto, "%d\t%d\t%s\t%d\t%s\n", reservation.refVol, reservation.agence, reservation.transaction, reservation.valeur, reservation.resultat);
+                    // Enregistrer les données de la structure FACTURE dans facture.txt
+                    FACTURE facture;
+		    int pos3=ftell(fichierFacture);
+		    int c=fscanf(fichierFacture, "%d\t%f\n", &facture.agence, &facture.somme);
+                    while (c!=EOF)
+                    {
+                        if (facture.agence == agenceNum)
+                        {
+                            facture.somme -= (nbPlaces * v.prixPlace + (0.1 * nbPlaces* v.prixPlace));
+                            fseek(fichierFacture, pos3, SEEK_SET);
+                            fprintf(fichierFacture, "%d\t%f\n", facture.agence, facture.somme);
+                        }
+                        pos3=ftell(fichierFacture);
+		       c=fscanf(fichierFacture, "%d\t%f\n", &facture.agence, &facture.somme);
+                    }
+
+                    printf("Annulation effectuée avec succès pour le vol %d.\n", refVol);
+                    // trouve = 1;
+                    fclose(fichierHisto);
+                    fclose(fichierVols);
+                    fclose(fichierFacture);
+                    return 1;
+                    break;
+            }
+            pos2 = ftell(fichierVols);
+            b=fscanf(fichierVols, "%d\t%s\t%d\t%f\n", &v.refVol, v.destination, &v.nbPlaceDispo, &v.prixPlace);
+        }
+
+    }
+    a=fscanf(fichierHisto, "%d\t%d\t%s\t%d\t%s\n", &r.refVol, &r.agence, r.transaction, &r.valeur, r.resultat);
+   }
+     fclose(fichierHisto);
+    fclose(fichierVols);
+    fclose(fichierFacture);
+    return 0;
+}
+
+// affichage de la reservation
+void afficher_histo(RESERVATION res)
+{
+    printf("la reference du vol est : %d \n ", res.refVol);
+    printf("le num de l'agence est : %d \n", res.agence);
+    printf(" la transaction faite est : %s \n ", res.transaction);
+    printf("le nbr de places à reserver est  : %d \n", res.valeur);
+    printf(" le résultat est  : %s \n ", res.resultat);
+}
+
+// affichage du fichier histo
+void afficher_fichier_histo()
+{
+    FILE *file = fopen("histo.txt", "r"); // mode lecture
+    if (file == NULL)
+    {
+        printf("erreur d'ouverture du fichier");
+    }
+    RESERVATION res;
+    while (fscanf(file, "%d\t%d\t%s\t%d\t%s\n", &res.refVol, &res.agence, res.transaction, &res.valeur, res.resultat) !=EOF)
+    {
+        printf("%d\t%d\t%s\t%d\t%s\n", res.refVol, res.agence, res.transaction, res.valeur, res.resultat);
+    }
+    fclose(file);
+}
+
+// affichage de la facture
+void afficher_facture(FACTURE fact)
+{
+    printf("la reference de l'agence est : %d \n ", fact.agence);
+    printf("la somme à payer est : %.2f \n", fabs(fact.somme));
+}
+
+// affichage du fichier facture
+void afficher_fichier_facture()
+{
+    FILE *file = fopen("facture.txt", "r"); // mode lecture
+    if (file == NULL)
+    {
+        printf("erreur d'ouverture du fichier");
+        return;
+    }
+    FACTURE fact;
+    while (fscanf(file, "%d\t%f\n", &fact.agence, &fact.somme)!=EOF)
+    {
+        printf("%d\t%f\n", fact.agence, fact.somme);
+    }
+    fclose(file);
+}
+
+// affichage des données de la facture en donnant num de l'agence
+FACTURE recuperer_facture_agence(int agence)
+{
+    FACTURE fact;
+    FILE *file = fopen("facture.txt", "r");
+    if (file == NULL)
+    {
+        printf("erreur d'ouverture du fichier");
+    }
+    int found = 0;
+    while (!feof(file))
+    {
+        fscanf(file, "%d\t%f\n", &fact.agence, &fact.somme);
+        if (fact.agence == agence)
+        {
+            found = 1;
+            break;
+        }
+    }
+    if (found)
+    {
+        return fact;
+    }
+    else
+    {
+        fact.somme = 0;
+        return fact;
+    }
+    fclose(file);
+}

@@ -1,0 +1,47 @@
+#include<stdio.h>
+#include<string.h>
+
+
+// structure Vol 
+typedef struct {
+int refVol;
+char destination[20];
+int nbPlaceDispo;
+float prixPlace;
+} VOL;
+
+//structure Reservation
+typedef struct {
+int refVol;
+int agence;
+char transaction[20];
+int valeur;
+char resultat[20];
+} RESERVATION;
+
+//structure de facture 
+typedef struct {
+int agence;
+float somme;
+} FACTURE;
+
+// fonctions du vol 
+void saisir_vol(VOL*); //saisie d'un vol 
+void afficher_vol(VOL); // affichage du vol 
+void fichier_vol(VOL);  // Ecrire les données du vol dans un fichier 
+void afficher_fichier_vol(); // affichage du fichier vol 
+VOL recuperer_info_vol(int); // affichage des données du vol en donnat sa ref 
+
+
+
+
+//fonctions de reservation 
+void afficher_histo(RESERVATION);// affichage de la reservation 
+void afficher_fichier_histo();
+int demande_vol(int,int,int); //reservation d'un vol 
+int annulation_vol(int,int,int);// annulation d'un vol 
+
+// fonctions de facture 
+void afficher_facture(FACTURE) ;
+void afficher_fichier_facture();
+FACTURE recuperer_facture_agence(int);

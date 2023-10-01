@@ -1,0 +1,288 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <error.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include "mabib.h"
+int main()
+{
+	int sid;
+	int choixType, choixService, refVol, numAgence, nbPlaces, testReservation, testAnnulation;
+	struct sockaddr_in serv_addr;
+	// creer la socket
+	sid = socket(AF_INET, SOCK_STREAM, 0); // AF_INET: pour un domaine internet,SOCK_STREAM:fkux de données en mode connecté,0:protocole ip
+	if (sid < 0)
+	{
+		printf("erreur de creation de la socket");
+		exit(-1);
+	}
+	serv_addr.sin_addr.s_addr = inet_addr("192.168.105.211");
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(32000);
+	// connecter la socket
+	if (connect(sid, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	{
+		printf("erreur de connection avec la socket\n");
+		exit(-1);
+	}
+	printf("choisissez le type d'utilisateur:\n1-Agence\t\t2-Compagnie Aérienne\n");
+	scanf("%d", &choixType);
+	if (send(sid, &choixType, sizeof(choixType), 0) == -1)
+	{
+		perror("Erreur lors de l'envoi de choix de type au serveur");
+		exit(EXIT_FAILURE);
+	}
+	switch (choixType)
+	{
+	case 1:
+	{
+		printf("Donner votre numéro d'agence: ");
+		scanf("%d", &numAgence);
+		if (send(sid, &numAgence, sizeof(int), 0) == -1)
+		{
+			perror("Erreur lors de l'envoi de numéro d'agence");
+			exit(EXIT_FAILURE);
+		}
+		printf("choisissez un service :\n1-Réserver des places pour un vol\t\t2-Annuler une réservation\t\t3-Récupérer une facture\n");
+		scanf("%d", &choixService);
+		if (send(sid, &choixService, sizeof(choixService), 0) == -1)
+		{
+			perror("Erreur lors de l'envoi de service demandé");
+			exit(EXIT_FAILURE);
+		}
+		switch (choixService)
+		{
+		case 1:
+		{
+			printf("Donner la reference de vol à reserver : ");
+			scanf("%d", &refVol);
+			if (send(sid, &refVol, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi de la référence de vol");
+				exit(EXIT_FAILURE);
+			}
+			printf("Donner le nombre de place à réserver : ");
+			scanf("%d", &nbPlaces);
+			if (send(sid, &nbPlaces, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi de nombre de places");
+				exit(EXIT_FAILURE);
+			}
+			if (recv(sid, &testReservation, sizeof(int), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+			if (testReservation)
+			{
+				printf("Reservation terminée avec succés\n");
+			}
+			else
+			{
+				printf("Nombre de place à réserver est supérieur à nombre de places disponibles\n");
+			}
+			break;
+		}
+		case 2:
+		{
+			printf("Donner la reference de vol à annuler: ");
+			scanf("%d", &refVol);
+			if (send(sid, &refVol, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi de référence de vol à annuler");
+				exit(EXIT_FAILURE);
+			}
+			printf("Donner le nombre de place : ");
+			scanf("%d", &nbPlaces);
+			if (send(sid, &nbPlaces, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi de nombre de places à annuler");
+				exit(EXIT_FAILURE);
+			}
+			if (recv(sid, &testAnnulation, sizeof(int), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+			if (testAnnulation)
+			{
+				printf("Annulation terminee avec succes !!!\n");
+			}
+			else
+			{
+				printf("Annulation ne peut pas étre effctuée!\n");
+			}
+			break;
+		}
+		case 3:
+		{
+			FACTURE fac;
+			bzero((FACTURE *)&fac, sizeof(FACTURE));
+			int n = read(sid, &fac, sizeof(FACTURE));
+			if (n < 0)
+			{
+				perror("Erreur de réception de facture demandée");
+				exit(1);
+			}
+			if (fac.somme != 0)
+			{
+				afficher_facture(fac);
+			}
+			else
+				printf("Erreur : l'agence avec numéro %d n'a pas du facture pour le moment dans le fichier facture.txt\n", numAgence);
+			break;
+		}
+		default:
+		{
+			break;
+		}
+		}
+		break;
+	}
+	case 2:
+	{
+		printf("choisissez un service:\n1-Consulter un vol par sa référence\t\t2-Consulter la facture d'une agence\t\t3-Consulter toutes les factures\t\t4-Consulter l'historique des transactions\t\t5-Consulter tous les vols \t\t6-Ajouter un vol\n");
+		scanf("%d", &choixService);
+		if (send(sid, &choixService, sizeof(choixService), 0) == -1)
+		{
+			perror("Erreur lors de l'envoi de service demandé");
+			exit(EXIT_FAILURE);
+		}
+		switch (choixService)
+		{
+		case 1:
+		{
+			printf("Donner la référence de vol : ");
+			scanf("%d", &refVol);
+			if (send(sid, &refVol, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi de la référence de vol");
+				exit(EXIT_FAILURE);
+			}
+			VOL vol;
+			bzero((VOL *)&vol, sizeof(VOL));
+			int n = read(sid, &vol, sizeof(VOL));
+			if (n < 0)
+			{
+				perror("Erreur de lecture du vol du serveur");
+				exit(1);
+			}
+			if (vol.refVol != -1)
+			{
+				afficher_vol(vol);
+			}
+			else
+				printf("Erreur : vol avec référence %d non trouvé dans le fichier vol.txt\n", vol.refVol);
+			break;
+		}
+		case 2:
+		{
+			printf("Donner la numéro de l'agence : ");
+			scanf("%d", &numAgence);
+			if (send(sid, &numAgence, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi de numéro d'agence");
+				exit(EXIT_FAILURE);
+			}
+			FACTURE fac;
+			bzero((FACTURE *)&fac, sizeof(FACTURE));
+			int n = read(sid, &fac, sizeof(FACTURE));
+			if (n < 0)
+			{
+				perror("Erreur de lecture du facture");
+				exit(1);
+			}
+			if (fac.somme != 0)
+			{
+				afficher_facture(fac);
+			}
+			else
+				printf("Erreur : l'agence avec numéro %d n'a pas du facture pour le moment dans le fichier facture.txt\n", numAgence);
+			break;
+		}
+		case 3:
+		{
+			FACTURE fact;
+			ssize_t received;
+			while ((received = recv(sid, &fact, sizeof(fact), 0)) > 0)
+			{
+				printf("%d\t%f\n", fact.agence, fact.somme);
+			}
+
+			if (received == -1)
+			{
+				perror("recv");
+				exit(EXIT_FAILURE);
+			}
+			if (received == 0)
+			{
+				printf("Erreur : il n y a pas de facture pour le moment");
+			}
+			break;
+		}
+		case 4:
+		{
+			RESERVATION res;
+			ssize_t received;
+			while ((received = recv(sid, &res, sizeof(res), 0)) > 0)
+			{
+				printf("%d\t%d\t%s\t%d\t%s\n", res.refVol, res.agence, res.transaction, res.valeur, res.resultat);
+				
+			}
+
+			if (received == -1)
+			{
+				perror("recv");
+				exit(EXIT_FAILURE);
+			}
+			if (received == 0)
+			{
+				printf("Erreur : il n y a pas de réservation pour le moment");
+			}
+			break;
+		}
+		case 5:
+		{
+			VOL vol;
+			ssize_t received;
+			while ((received = recv(sid, &vol, sizeof(VOL), 0)) > 0)
+			{
+				printf("%d\t%s\t%d\t%f\n", vol.refVol, vol.destination, vol.nbPlaceDispo, vol.prixPlace);
+			}
+
+			if (received == -1)
+			{
+				perror("recv");
+				exit(EXIT_FAILURE);
+			}
+			if (received == 0)
+			{
+				printf("Erreur : il n y a pas de vol");
+			}
+			break;
+		}
+		case 6 :
+		{
+    			VOL v;
+    			saisir_vol(&v);
+    			if (send(sid, &v, sizeof(VOL), 0) == -1) {
+        		perror("Erreur lors de l'envoi des données au serveur");
+        		exit(EXIT_FAILURE);
+    		
+    	         	}
+    	                break;
+    	        }
+		default:
+		{
+			break;
+		}
+		}
+	}
+	default:
+		break;
+	}
+}

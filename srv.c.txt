@@ -1,0 +1,269 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <error.h>
+#include <string.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include "mabib.h"
+
+pthread_mutex_t mutex;
+
+void *connection_handler(void *socketClient)
+{
+
+	int newSocket = *(int *)socketClient;
+	int choixType, choixService, refVol, nbPlaces, numAgence;
+
+	if (recv(newSocket, &choixType, sizeof(choixType), 0) < 0)
+	{
+		perror("Erreur de lecture du socket");
+		exit(1);
+	}
+	printf("choix type= %d\n", choixType);
+	switch (choixType)
+	{
+	
+	case 1:
+	{
+		if (recv(newSocket, &numAgence, sizeof(int), 0) < 0)
+		{
+			perror("Erreur de lecture du socket");
+			exit(1);
+		}
+		if (recv(newSocket, &choixService, sizeof(choixService), 0) < 0)
+		{
+			perror("Erreur de lecture du socket");
+			exit(1);
+		}
+		switch (choixService)
+		{
+		case 1:
+		{
+			if (recv(newSocket, &refVol, sizeof(int), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+			if (recv(newSocket, &nbPlaces, sizeof(int), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+			printf("refVol %d",refVol);
+			printf("nbPlaces %d",nbPlaces);
+			pthread_mutex_lock(&mutex);
+			int test = demande_vol(refVol, nbPlaces,numAgence);
+			pthread_mutex_unlock(&mutex);
+			if (send(newSocket, &test, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi des données au serveur 2");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
+		case 2:
+		{
+			if (recv(newSocket, &refVol, sizeof(refVol), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+
+			if (recv(newSocket, &nbPlaces, sizeof(int), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+                        pthread_mutex_lock(&mutex);
+			int test = annulation_vol(refVol, nbPlaces,numAgence);
+			pthread_mutex_unlock(&mutex);
+			if (send(newSocket, &test, sizeof(int), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi des données au serveur 2");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
+		case 3:
+		{
+			FACTURE f = recuperer_facture_agence(numAgence);
+			if (send(newSocket, &f, sizeof(FACTURE), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi des données au serveur");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
+		}
+		break;
+	}
+	case 2:
+	{
+	         
+		if (recv(newSocket, &choixService, sizeof(choixService), 0) < 0)
+		{
+			perror("Erreur de lecture du socket");
+			exit(1);
+		}
+		printf("choix service= %d\n", choixService);
+		switch (choixService)
+		{
+		case 1:
+		{
+			if (recv(newSocket, &refVol, sizeof(refVol), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+			VOL v = recuperer_info_vol(refVol);
+			if (send(newSocket, &v, sizeof(VOL), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi de vol au client");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
+		case 2:
+		{
+			if (recv(newSocket, &numAgence, sizeof(numAgence), 0) < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+			FACTURE f = recuperer_facture_agence(numAgence);
+			if (send(newSocket, &f, sizeof(FACTURE), 0) == -1)
+			{
+				perror("Erreur lors de l'envoi des données au serveur");
+				exit(EXIT_FAILURE);
+			}
+			break;
+		}
+		case 3:
+		{
+			FILE *file = fopen("facture.txt", "r"); // mode lecture
+			if (file == NULL)
+			{
+				printf("erreur d'ouverture du fichier");
+				
+			}
+			FACTURE fact;
+			while (fscanf(file, "%d\t%f\n", &fact.agence, &fact.somme)!=EOF)
+			{
+				send(newSocket, &fact, sizeof(fact), 0);
+			}
+			fclose(file);
+			break;
+		}
+		case 4:
+		{
+			FILE *file = fopen("histo.txt", "r"); // mode lecture
+			if (file == NULL)
+			{
+				printf("erreur d'ouverture du fichier");
+				
+			}
+			RESERVATION res;
+			while (fscanf(file, "%d\t%d\t%s\t%d\t%s\n", &res.refVol, &res.agence, res.transaction, &res.valeur, res.resultat)!=EOF )
+			{
+				send(newSocket, &res, sizeof(res), 0);
+			}
+			fclose(file);
+			break;
+		}
+		case 5:
+		{
+			FILE *file = fopen("vols.txt", "r"); // mode lecture
+			if (file == NULL)
+			{
+				printf("erreur d'ouverture du fichier");
+				
+			}
+			VOL vol;
+			while (fscanf(file, "%d\t%s\t%d\t%f\n", &vol.refVol, vol.destination, &vol.nbPlaceDispo, &vol.prixPlace)!=EOF)
+			{
+				send(newSocket, &vol, sizeof(vol), 0);
+			}
+			fclose(file);
+			break;
+		}
+		case 6:
+		{
+			VOL vol;
+			bzero((char *)&vol, sizeof(vol));
+			int n = read(newSocket, &vol, sizeof(vol));
+			if (n < 0)
+			{
+				perror("Erreur de lecture du socket");
+				exit(1);
+			}
+			fichier_vol(vol);
+			break;
+		}
+		}
+		break;
+	}
+	}
+	free(socketClient);
+}
+int main()
+{
+
+	int sid, client_sock, c, *new_sock;
+	struct sockaddr_in serv_addr, clt_addr;
+
+	// Initialisation du sémaphore
+	pthread_mutex_init(&mutex,NULL);
+
+	// Création du socket
+	sid = socket(AF_INET, SOCK_STREAM, 0);
+	if (sid < 0)
+	{
+		printf("erreur de creation de la socket");
+		exit(-1);
+	}
+
+	// Préparation de la structure sockaddr_in
+	serv_addr.sin_addr.s_addr = inet_addr("192.168.105.211");
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(32000);
+
+	// Bind
+	if (bind(sid, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+	{
+		printf("erreur de bind de socket\n");
+		exit(-1);
+	}
+	// Listen
+	listen(sid, 10);
+	// Accept and incoming connection
+	c = sizeof(struct sockaddr_in);
+	while ((client_sock = accept(sid, (struct sockaddr *)&clt_addr, (socklen_t *)&c))) {
+		// Création d'un nouveau thread pour gérer la connexion
+		pthread_t thread;
+		new_sock = malloc(1);
+		*new_sock = client_sock;
+
+		if (pthread_create(&thread, NULL, connection_handler, (void *)new_sock) < 0)
+		{
+			perror("erreur de creation de processus léger");
+			return 1;
+		}
+
+		// JOIN afin que nous ne terminions pas avant le thread cré précedement
+		pthread_join(thread, NULL);
+	}
+
+	if (client_sock < 0)
+	{
+		perror("accept n'a pas fonctionné ");
+		return 1;
+	}
+	pthread_mutex_destroy(&mutex);
+	return 0;
+}
